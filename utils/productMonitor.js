@@ -1,12 +1,12 @@
 import * as cheerio from 'cheerio';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth'
+
 import cron from 'node-cron';
-import axios from 'axios';
 import { appendFile, readFile, writeFile } from 'fs/promises';
 import { onePLNtoYEN } from './currencyMonitor.js';
 import { EmbedBuilder } from 'discord.js';
 import { broadcastMessages } from './broadcast.js';
-
 const refreshRate = "10";
 let previousProductList = [];
 
@@ -52,7 +52,11 @@ const getFullProductList = async () => {
   let fullProductList = [];
   let totalAmountOfProducts = 0;
 
-  const browser = await puppeteer.launch({ headless: false })
+  puppeteer.use(StealthPlugin())
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  })
   const page = await browser.newPage();
 
   try {
