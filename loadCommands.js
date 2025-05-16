@@ -43,7 +43,8 @@ export async function loadCommands(client) {
       }
 
       await rest.put(
-        Routes.applicationCommands(process.env.CLIENT_ID, process.env.TEST_SERVER_ID),
+        Routes.applicationCommands(process.env.CLIENT_ID),
+        //Routes.applicationCommands(process.env.CLIENT_ID, process.env.TEST_SERVER_ID),
         { body: commands },
       )
 
