@@ -1,6 +1,5 @@
 import dotenv from "dotenv"
 import { Client, GatewayIntentBits, Collection, Events } from "discord.js"
-import fs from "fs"
 import path from "path"
 import { fileURLToPath } from "url"
 import { initProductMonitor } from "./utils/productMonitor.js"

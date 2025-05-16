@@ -14,7 +14,7 @@ const commands = []
 const commandsPath = path.join(__dirname, "commands")
 const commandFiles = fs
   .readdirSync(commandsPath)
-  .filter((file) => file.endsWith(".js") && file !== "deploy-commands.js")
+  .filter((file) => file.endsWith(".js"))
 
 export async function loadCommands(client) {
   for (const file of commandFiles) {
@@ -33,8 +33,8 @@ export async function loadCommands(client) {
     }
   }
 
-  const rest = new REST({ version: "9" }).setToken(process.env.DISCORD_TOKEN)
-  ;(async () => {
+  const rest = new REST({ version: "9" }).setToken(process.env.DISCORD_TOKEN);
+  (async () => {
     try {
       console.log("Rozpoczynam rejestrację komend aplikacji (/).")
 
@@ -43,8 +43,7 @@ export async function loadCommands(client) {
       }
 
       await rest.put(
-        //Routes.applicationCommands(process.env.CLIENT_ID),
-        Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.TEST_SERVER_ID),
+        Routes.applicationCommands(process.env.CLIENT_ID, process.env.TEST_SERVER_ID),
         { body: commands },
       )
 

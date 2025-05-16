@@ -1,6 +1,6 @@
 import * as cheerio from 'cheerio';
 import puppeteer from 'puppeteer-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth'
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 
 import cron from 'node-cron';
 import { appendFile, readFile, writeFile } from 'fs/promises';
@@ -133,14 +133,38 @@ async function doesRegistryExists(registry) {
   }
 }
 
-export async function monitorProducts(guildId, channelId) {
-  const registry = `${notification.AMIAMI_NEW_FUMOS} ${guildId} ${channelId}`;
+export async function addChannelToNotificationList(guildId, channelId) {
+  const registry = `${global.NOTIFICATION_CODE.AMIAMI_NEW_FUMOS} ${guildId} ${channelId}`;
 
   if (!(await doesRegistryExists(registry))) {
-    await appendFile(global.NOTIFICATION_FILE, registry + '\n', 'utf-8');
-    console.log("Dodano rejestr.");
+    await appendFile(global.NOTIFICATION_FILE, "\n" + registry, "utf-8");
+    return "success";
   } else {
-    console.log(`Rejestr istnieje.`);
+    return "failed";
+  }
+}
+
+export async function disableChannelFromNotificationList(guildId, channelId) {
+  const registry = `${global.NOTIFICATION_CODE.AMIAMI_NEW_FUMOS} ${guildId} ${channelId}`;
+
+  try {
+    const content = await readFile(global.NOTIFICATION_FILE, 'utf-8');
+    const lines = content.split('\n');
+    console.log(registry);
+    console.log(lines);
+
+    const filtered = lines.filter(line => line !== registry);
+    console.log(filtered);
+
+    if (lines.length === filtered.length) {
+      return "failed";
+    }
+
+    await writeFile(global.NOTIFICATION_FILE, filtered.join('\n'), 'utf-8');
+    return "success";
+  } catch (err) {
+    console.error('Błąd przy usuwaniu z pliku:', err);
+    return "error";
   }
 }
 
