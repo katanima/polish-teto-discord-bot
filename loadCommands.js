@@ -1,6 +1,8 @@
 import { REST } from "@discordjs/rest"
 import { Routes } from "discord-api-types/v9"
-import fs from "fs"
+import { readdirSync, constants } from "fs"
+import { readFile, access } from 'fs/promises'
+
 import path from "path"
 import { fileURLToPath } from "url"
 import dotenv from "dotenv"
@@ -12,9 +14,7 @@ const __dirname = path.dirname(__filename)
 
 const commands = []
 const commandsPath = path.join(__dirname, "commands")
-const commandFiles = fs
-  .readdirSync(commandsPath)
-  .filter((file) => file.endsWith(".js"))
+const commandFiles = readdirSync(commandsPath).filter((file) => file.endsWith(".js"))
 
 export async function loadCommands(client) {
   for (const file of commandFiles) {
@@ -44,9 +44,24 @@ export async function loadCommands(client) {
 
       await rest.put(
         Routes.applicationCommands(process.env.CLIENT_ID),
-        //Routes.applicationCommands(process.env.CLIENT_ID, process.env.TEST_SERVER_ID),
         { body: commands },
       )
+
+      const priorityGuildsFilePath = "./priorityGuilds.json";
+      try {
+        await access(priorityGuildsFilePath, constants.F_OK);
+        const file = await readFile(priorityGuildsFilePath, 'utf-8');
+        const priorityGuilds = file.split('\n').map(l => l.trim());
+
+        if (priorityGuilds.filter(Boolean).length > 0) {
+          for (let guild of priorityGuilds) {
+            await rest.put(
+              Routes.applicationGuildCommands(process.env.CLIENT_ID, guild),
+              { body: commands },
+            )
+          }
+        }
+      } catch {}
 
       console.log("Pomyślnie zarejestrowano komendy aplikacji (/).")
     } catch (error) {
