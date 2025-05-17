@@ -52,7 +52,7 @@ const getFullProductList = async () => {
   let fullProductList = [];
   let totalAmountOfProducts = 0;
 
-  puppeteer.use(StealthPlugin())
+  puppeteer.use(StealthPlugin());
   const browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -150,11 +150,7 @@ export async function disableChannelFromNotificationList(guildId, channelId) {
   try {
     const content = await readFile(global.NOTIFICATION_FILE, 'utf-8');
     const lines = content.split('\n');
-    console.log(registry);
-    console.log(lines);
-
     const filtered = lines.filter(line => line !== registry);
-    console.log(filtered);
 
     if (lines.length === filtered.length) {
       return "failed";

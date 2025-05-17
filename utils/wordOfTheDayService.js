@@ -1,16 +1,16 @@
 import * as cheerio from 'cheerio';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 
 import cron from 'node-cron';
 import { broadcastMessages } from './broadcast.js';
 
-const hourOfUpdate = "12";
+const hourOfUpdate = "7";
 
 const getHTML = async () => {
   let html;
 
-  puppeteer.use(StealthPlugin())
+  puppeteer.use(StealthPlugin());
   const browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -24,6 +24,7 @@ const getHTML = async () => {
       const match = elements.find(el => el.textContent.trim() === "rzeczownik");
       if (match) match.click();
     });
+    await new Promise(resolve => setTimeout(resolve, 100));
     await page.type("input#ilosc", "1");
     await page.click("input[alt='generuj słowa']");
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -54,7 +55,7 @@ export const initWordOfTheDayService = async (client) => {
         broadcastMessages( global.NOTIFICATION_CODE.TETO_WORD_OF_THE_DAY,
           client,
           async (channel) => {
-            await channel.send(`Słowo dnia Kaśki >>> ||${word}||`);
+            await channel.send(`Słowo dnia Kaśki ||${word}||`);
         });
       }
 

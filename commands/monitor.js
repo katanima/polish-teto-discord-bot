@@ -31,7 +31,7 @@ export async function execute(interaction) {
   if(exitCode === "success") {
     await interaction.reply({ 
       content: 
-      `Ayyy ${ping} aktywował monitorowanie produktów. Powiadomienia będą wysyłane na ten kanał JFS
+      `Ayyy ${ping} aktywował monitorowanie fumosów. Powiadomienia będą wysyłane na ten kanał JFS
       https://tenor.com/view/suwako-moriya-suwako-moriya-touhou-touhou-project-gif-6911405824567521378`
     });
   } else if (exitCode === "failed") {
