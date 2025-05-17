@@ -7,24 +7,19 @@ import { appendFile, readFile, writeFile } from 'fs/promises';
 import { onePLNtoYEN } from './currencyMonitor.js';
 import { EmbedBuilder } from 'discord.js';
 import { broadcastMessages } from './broadcast.js';
-const refreshRate = "10";
+const refreshRate = "5";
 let previousProductList = [];
 
 export const url = "https://www.amiami.com/eng/search/list/?s_st_list_preorder_available=1&s_st_list_backorder_available=1&s_st_list_newitem_available=1&s_st_condition_flg=1&s_keywords=touhou%20plush&pagecnt=";
 
 
-const getProductListFromSite = async (html) => {
+const getProductListFromSite = async ($, ProperAmountOfProducts) => {
   const productList = [];
-
-  if (!html) {
-    console.error('Brak HTML — możliwe zablokowanie przez stronę.');
-    return [];
-  }
-
-  const $ = cheerio.load(html);
   //console.log("Pobrany tytuł strony:", $("title").text());
 
-  const amountOfProductsOnPage = parseInt($(".search-result__text").text().split(" ")[2].trim());
+  const amountOfProductsOnThisPage = await checkAmountOfProducts($);
+  if (ProperAmountOfProducts !== amountOfProductsOnThisPage)
+    throw Error(`Element z informacją o ilości produktów na stronie nie zgadza się z otrzymaną wartością. Spodziewana ilość (${ProperAmountOfProducts}) Wykryto (${amountOfProductsOnThisPage})`)
 
   const products = $(".newly-added-items__item > a");
   products.each((i, product) => {
@@ -45,12 +40,33 @@ const getProductListFromSite = async (html) => {
     productList.push({ name, state: visibleTag, price, image, link });
   });
 
-  return { productList, amountOfProductsOnPage };
+  return productList;
+}
+
+const scanWebsiteInSearchOfErrors = async ($) => {
+  if ($("h2.item-detail__error-title").length > 0)
+    throw Error("error-page");
+  if ($(".new-items__inner").children().length === 0)
+    throw Error("empty-list");
+}
+
+const checkAmountOfProducts = async ($) => {
+  const element = $(".search-result__text").text();
+  if (element === "")
+    throw Error("Element jest pusty.");
+
+  return parseInt(element.split(" ")[2].trim());
+}
+
+const getCheerio = async (page, url) => {
+  await page.goto(url, { waitUntil: 'networkidle2', timeout: 7000 });
+  await page.waitForSelector('.nomore', { timeout: 3000 });
+  const html = await page.content();
+  return cheerio.load(html)
 }
 
 const getFullProductList = async () => {
   let fullProductList = [];
-  let totalAmountOfProducts = 0;
 
   puppeteer.use(StealthPlugin());
   const browser = await puppeteer.launch({
@@ -60,39 +76,51 @@ const getFullProductList = async () => {
   const page = await browser.newPage();
 
   try {
-    for (let i = 1; i < 9; i++) {
-      let html;
-      let errorExists = false;
+    let amountOfPages;
+    let amountOfProducts;
+    let $;
+    let errorExists;
+    let attempts = 7;
+    const productsPerPage = 20;
+    do {
+      errorExists = false;
+      attempts--;
+      if (attempts === 0) throw new Error("Gówno się zapchało. Jebać to. Zrywam połączenie, elo.");
+      try {
+        $ = await getCheerio(page, url + 1);
+        amountOfProducts = await checkAmountOfProducts($);
+        amountOfPages = amountOfProducts / productsPerPage + 1;
+      } catch (error) {
+        errorExists = true;
+        console.log(`Wykryto błędną strone: ${error.message}`);
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    } while (errorExists)
+
+    for (let i = 1; i <= amountOfPages; i++) {
+      let errorExists;
       let attempts = 7;
       do {
+        errorExists = false;
         attempts--;
-        if (attempts == 0)
-          throw new Error("Gówno się zapchało. Jebać to. Zrywam połączenie, elo.");
+        if (attempts === 0) throw new Error("Gówno się zapchało. Jebać to. Zrywam połączenie, elo.");
 
-        await page.goto(url + i, { waitUntil: 'networkidle2', timeout: 10000 });
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        html = await page.content();
-        const $ = cheerio.load(html);
-        errorExists = $("h2.item-detail__error-title").length > 0;
+        try {
+          if (i !== 1) {
+            $ = await getCheerio(page, url + i);
+          }
+          await scanWebsiteInSearchOfErrors($);
+          const productList = await getProductListFromSite($, amountOfProducts);
+          fullProductList = fullProductList.concat(productList);
 
-        if (errorExists) {
-          console.log("Wykryto stronę błędu, ponawiam próbę...");
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        } else {     
-          if($(".new-items__inner").children().length === 0) //is last page?
-            return { fullProductList, totalAmountOfProducts }
+        } catch (error) {
+          errorExists = true;
+          console.log(`Wykryto błędną strone: ${error.message}`);
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
       } while (errorExists);
-
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      const { productList, amountOfProductsOnPage } = await getProductListFromSite(html);
-
-      if(amountOfProductsOnPage > totalAmountOfProducts)
-        totalAmountOfProducts = amountOfProductsOnPage;
-
-      fullProductList = fullProductList.concat(productList);
     }
-    return { fullProductList, totalAmountOfProducts: -1 }
+    return { fullProductList, amountOfProducts }
 
   } catch (error) {
     throw error;
@@ -102,17 +130,17 @@ const getFullProductList = async () => {
 }
 
 const getNewlyAddedProducts = async () => {
-  const { fullProductList, totalAmountOfProducts } = await getFullProductList();
+  const { fullProductList, amountOfProducts } = await getFullProductList();
   const newProducts = fullProductList.filter(product =>
     !previousProductList.some(old => old.name === product.name)
   );
 
-  if(fullProductList.length === totalAmountOfProducts) {
+  if (fullProductList.length === amountOfProducts) {
     previousProductList = fullProductList;
   } else {
-    throw new Error(`Elementy w liście (${fullProductList.length}. Spodziewanych elementów (${totalAmountOfProducts})`);
+    throw new Error(`Elementy w liście (${fullProductList.length}). Spodziewanych elementów (${amountOfProducts})`);
   }
-  
+
   return newProducts;
 }
 
@@ -178,17 +206,17 @@ export async function initProductMonitor(client) {
     return;
   }
   console.log("Pomyślnie aktywowano monitor fumosów.");
-  
+
   cron.schedule(`*/${refreshRate} * * * *`, async () => {
     const now = new Date();
     console.log(`Sprawdzanie monitorowanych produktów... [${now.toLocaleString()}]`);
-  
+
     let retries = 3;
     while (retries > 0) {
       try {
         const productList = await getNewlyAddedProducts();
         console.log(`NOWYCH FUMOSÓW ==> ${productList.length}\n`);
-  
+
         if (productList.length > 0) {
           await broadcastMessages(
             global.NOTIFICATION_CODE.AMIAMI_NEW_FUMOS,
@@ -197,14 +225,14 @@ export async function initProductMonitor(client) {
               for (const product of list) {
                 const price = parseInt(product.price.replace(",", ""));
                 const pricePLN = (price / onePLNtoYEN).toFixed(2);
-  
+
                 const embed = new EmbedBuilder()
                   .setTitle(product.name)
                   .setURL(product.link)
                   .setDescription(`${product.state}\n${price} JPY ≈ ${pricePLN} PLN`)
                   .setImage(product.image)
                   .setColor(0xff66aa);
-  
+
                 await channel.send({ embeds: [embed] });
               }
             },
@@ -213,9 +241,9 @@ export async function initProductMonitor(client) {
         }
         break;
       } catch (error) {
-        console.error(`Błąd przy pobieraniu nowych produktów (pozostało prób: ${retries - 1}):`, error);
+        console.error(`Błąd przy pobieraniu nowych produktów: ${error?.message ?? String(error)}`);
         retries--;
-  
+
         if (retries === 0) {
           console.error("Wszystkie próby nieudane. Pomijam ten cykl cron.");
         } else {
@@ -223,5 +251,5 @@ export async function initProductMonitor(client) {
         }
       }
     }
-  });  
+  });
 }
